@@ -207,6 +207,7 @@ struct JobStats {
     longest_streak: u32,
     last_status: String,
     branch: Option<String>,
+    failed_run_ids: Vec<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -469,6 +470,7 @@ async fn analyze_workflow_runs(
                             .as_ref()
                             .map_or("unknown".to_string(), |c| format!("{:?}", c)),
                         branch: branch.clone(),
+                        failed_run_ids: vec![],
                     });
 
                     stats.total_runs += 1;
@@ -510,6 +512,7 @@ async fn analyze_workflow_runs(
                         stats.current_streak = stats.consecutive_failures;
                         stats.longest_streak = stats.longest_streak.max(stats.current_streak);
                         workflow_failed = true;
+                        stats.failed_run_ids.push(*job.run_id);
                     } else {
                         stats.consecutive_failures = 0;
                     }
@@ -762,11 +765,11 @@ fn write_workflow_analysis_markdown(
         writeln!(writer)?;
         writeln!(
             writer,
-            "| Job Name | Total Runs | Failures | Failure Rate | Avg Duration | Current Failure Streak | Longest Failure Streak | Last Status |"
+            "| Job Name | Total Runs | Failures | Failure Rate | Avg Duration | Current Failure Streak | Longest Failure Streak | Last Status | Failed Run IDs |"
         )?;
         writeln!(
             writer,
-            "|----------|------------|----------|--------------|--------------|------------------------|------------------------|-------------|"
+            "|----------|------------|----------|--------------|--------------|------------------------|------------------------|-------------|----------------|"
         )?;
 
         for (job_name, stats) in filtered_jobs {
@@ -777,7 +780,7 @@ fn write_workflow_analysis_markdown(
 
             writeln!(
                 writer,
-                "| {} | {} | {} | {:.1}% | {} | {} | {} | {} |",
+                "| {} | {} | {} | {:.1}% | {} | {} | {} | {} | {} |",
                 job_name,
                 stats.total_runs,
                 stats.failures,
@@ -785,7 +788,13 @@ fn write_workflow_analysis_markdown(
                 avg_duration,
                 stats.current_streak,
                 stats.longest_streak,
-                stats.last_status
+                stats.last_status,
+                stats
+                    .failed_run_ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
             )?;
         }
         writeln!(writer)?;
